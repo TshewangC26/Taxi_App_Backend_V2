@@ -12,7 +12,6 @@ use Illuminate\Support\Facades\Storage;
 
 class AuthController extends Controller
 {
-    // Register new user (Passenger or Driver)
     public function register(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -66,7 +65,6 @@ class AuthController extends Controller
         ], 201);
     }
 
-    // Login user — saves FCM token
     public function login(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -85,7 +83,6 @@ class AuthController extends Controller
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
-        // ✅ Save FCM token for push notifications
         if ($request->fcm_token) {
             $user->fcm_token = $request->fcm_token;
             $user->save();
@@ -109,19 +106,15 @@ class AuthController extends Controller
         ], 200);
     }
 
-    // Logout user
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
-
         return response()->json(['message' => 'Logged out successfully'], 200);
     }
 
-    // Get user profile
     public function getProfile(Request $request)
     {
         $user = $request->user();
-
         return response()->json([
             'user' => [
                 'id'            => $user->id,
@@ -136,7 +129,6 @@ class AuthController extends Controller
         ], 200);
     }
 
-    // Update user profile
     public function updateProfile(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -178,11 +170,9 @@ class AuthController extends Controller
         ], 200);
     }
 
-    // Load user profile
     public function loadUserProfile(Request $request)
     {
         $user = $request->user();
-
         return response()->json([
             'user' => [
                 'id'            => $user->id,
@@ -197,7 +187,6 @@ class AuthController extends Controller
         ], 200);
     }
 
-    // Change password
     public function changePassword(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -221,12 +210,9 @@ class AuthController extends Controller
         $user->password = Hash::make($request->new_password);
         $user->save();
 
-        return response()->json([
-            'message' => 'Password changed successfully!'
-        ], 200);
+        return response()->json(['message' => 'Password changed successfully!'], 200);
     }
 
-    // Forgot Password
     public function forgotPassword(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -250,17 +236,22 @@ class AuthController extends Controller
             ['token' => $token, 'created_at' => now()]
         );
 
-        \Mail::send('emails.reset_password', ['token' => $token, 'name' => $user->name], function ($message) use ($request) {
-            $message->to($request->email)
-                ->subject('DrukRide Taxi - Password Reset Code');
-        });
+        try {
+            \Mail::send('emails.reset_password', ['token' => $token, 'name' => $user->name], function ($message) use ($request) {
+                $message->to($request->email)
+                    ->subject('DrukRide Taxi - Password Reset Code');
+            });
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to send email: ' . $e->getMessage()
+            ], 500);
+        }
 
         return response()->json([
             'message' => 'Reset code sent to your email!'
         ], 200);
     }
 
-    // Reset Password
     public function resetPassword(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -293,8 +284,6 @@ class AuthController extends Controller
 
         \DB::table('password_resets')->where('email', $request->email)->delete();
 
-        return response()->json([
-            'message' => 'Password reset successfully!'
-        ], 200);
+        return response()->json(['message' => 'Password reset successfully!'], 200);
     }
 }
