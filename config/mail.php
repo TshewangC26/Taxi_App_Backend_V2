@@ -9,24 +9,16 @@ return [
         'smtp' => [
             'transport' => 'smtp',
             'host' => env('MAIL_HOST', 'smtp.gmail.com'),
-            'port' => env('MAIL_PORT', 465),
-            'encryption' => env('MAIL_ENCRYPTION', 'ssl'),
+            'port' => env('MAIL_PORT', 587),
+            'encryption' => env('MAIL_ENCRYPTION', 'tls'),
             'username' => env('MAIL_USERNAME'),
             'password' => env('MAIL_PASSWORD'),
-            'timeout' => null,
+            'timeout' => 60,
         ],
 
-        'ses' => [
-            'transport' => 'ses',
-        ],
-
-        'postmark' => [
-            'transport' => 'postmark',
-        ],
-
-        'resend' => [
-            'transport' => 'resend',
-        ],
+        'ses' => ['transport' => 'ses'],
+        'postmark' => ['transport' => 'postmark'],
+        'resend' => ['transport' => 'resend'],
 
         'sendmail' => [
             'transport' => 'sendmail',
@@ -38,25 +30,17 @@ return [
             'channel' => env('MAIL_LOG_CHANNEL'),
         ],
 
-        'array' => [
-            'transport' => 'array',
-        ],
+        'array' => ['transport' => 'array'],
 
         'failover' => [
             'transport' => 'failover',
-            'mailers' => [
-                'smtp',
-                'log',
-            ],
+            'mailers' => ['smtp', 'log'],
             'retry_after' => 60,
         ],
 
         'roundrobin' => [
             'transport' => 'roundrobin',
-            'mailers' => [
-                'ses',
-                'postmark',
-            ],
+            'mailers' => ['ses', 'postmark'],
             'retry_after' => 60,
         ],
 
