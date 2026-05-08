@@ -9,12 +9,11 @@ return [
         'smtp' => [
             'transport' => 'smtp',
             'host' => env('MAIL_HOST', 'smtp.gmail.com'),
-            'port' => env('MAIL_PORT', 587),
-            'encryption' => env('MAIL_ENCRYPTION', 'tls'),
+            'port' => env('MAIL_PORT', 465),
+            'encryption' => env('MAIL_ENCRYPTION', 'ssl'),
             'username' => env('MAIL_USERNAME'),
             'password' => env('MAIL_PASSWORD'),
             'timeout' => null,
-            'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
         ],
 
         'ses' => [
@@ -64,8 +63,8 @@ return [
     ],
 
     'from' => [
-        'address' => env('MAIL_FROM_ADDRESS', 'drukridetaxi@gmail.com'),
-        'name' => env('MAIL_FROM_NAME', 'DrukRideTaxi'),
+        'address' => env('MAIL_FROM_ADDRESS', 'easyride6202@gmail.com'),
+        'name' => env('MAIL_FROM_NAME', 'EasyRide'),
     ],
 
 ];
