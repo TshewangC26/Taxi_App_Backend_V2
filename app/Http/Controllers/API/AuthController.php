@@ -244,22 +244,21 @@ class AuthController extends Controller
 
             $brevo = new \Brevo\Brevo(env('BREVO_API_KEY'));
 
-            $brevo->transactionalEmails->sendTransacEmail(
-                new \Brevo\TransactionalEmails\Requests\SendTransacEmailRequest([
-                    'subject'     => 'DrukRide Taxi - Password Reset Code',
-                    'sender'      => new \Brevo\TransactionalEmails\Types\SendTransacEmailRequestSender([
-                        'name'  => 'DrukRideTaxi',
-                        'email' => 'easyride6202@gmail.com',
-                    ]),
-                    'to' => [
-                        new \Brevo\TransactionalEmails\Types\SendTransacEmailRequestToItem([
-                            'email' => $request->email,
-                            'name'  => $user->name,
-                        ]),
-                    ],
-                    'htmlContent' => $emailContent,
-                ])
-            );
+            $sendRequest = new \Brevo\TransactionalEmails\Requests\SendTransacEmailRequest();
+            $sendRequest->subject = 'DEasyRide - Password Reset Code';
+            $sendRequest->htmlContent = $emailContent;
+
+            $sender = new \Brevo\TransactionalEmails\Types\SendTransacEmailRequestSender();
+            $sender->name = 'EasyRide';
+            $sender->email = 'easyride6202@gmail.com';
+            $sendRequest->sender = $sender;
+
+            $recipient = new \Brevo\TransactionalEmails\Types\SendTransacEmailRequestToItem();
+            $recipient->email = $request->email;
+            $recipient->name = $user->name;
+            $sendRequest->to = [$recipient];
+
+            $brevo->transactionalEmails->sendTransacEmail($sendRequest);
 
         } catch (\Exception $e) {
             return response()->json([
