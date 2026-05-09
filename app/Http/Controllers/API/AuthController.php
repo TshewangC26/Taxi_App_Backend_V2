@@ -248,20 +248,22 @@ class AuthController extends Controller
             $sendRequest->subject = 'EasyRide - Password Reset Code';
             $sendRequest->htmlContent = $emailContent;
 
-            $sender = new \Brevo\TransactionalEmails\Types\SendTransacEmailRequestSender();
-            $sender->name = 'EasyRide';
-            $sender->email = 'easyride6202@gmail.com';
-            $sendRequest->sender = $sender;
+            $sendRequest->sender = new \Brevo\TransactionalEmails\Types\SendTransacEmailRequestSender([
+                'email' => 'easyride6202@gmail.com',
+                'name'  => 'EasyRide',
+            ]);
 
-            $recipient = new \Brevo\TransactionalEmails\Types\SendTransacEmailRequestToItem();
-            $recipient->email = $request->email;
-            $recipient->name = $user->name;
-            $sendRequest->to = [$recipient];
+            $sendRequest->to = [
+                new \Brevo\TransactionalEmails\Types\SendTransacEmailRequestToItem([
+                    'email' => $request->email,
+                    'name'  => $user->name,
+                ]),
+            ];
 
             $brevo->transactionalEmails->sendTransacEmail($sendRequest);
 
         } catch (\Exception $e) {
-            \Log::error('Email sending failed: ' . $e->getMessage() . ' ' . $e->getTraceAsString());
+            \Log::error('Email sending failed: ' . $e->getMessage());
             return response()->json([
                 'message' => 'Failed to send email: ' . $e->getMessage()
             ], 500);
