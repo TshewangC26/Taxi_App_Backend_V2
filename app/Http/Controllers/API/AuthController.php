@@ -237,27 +237,29 @@ class AuthController extends Controller
         );
 
         try {
-            $config = \Brevo\Client\Configuration::getDefaultConfiguration()
-                ->setApiKey('api-key', env('BREVO_API_KEY'));
-
-            $apiInstance = new \Brevo\Client\Api\TransactionalEmailsApi(
-                new \GuzzleHttp\Client(),
-                $config
-            );
-
             $emailContent = view('emails.reset_password', [
                 'token' => $token,
                 'name'  => $user->name,
             ])->render();
 
-            $sendSmtpEmail = new \Brevo\Client\Model\SendSmtpEmail([
-                'subject'     => 'DrukRide Taxi - Password Reset Code',
-                'sender'      => ['name' => 'DrukRideTaxi', 'email' => 'easyride6202@gmail.com'],
-                'to'          => [['email' => $request->email, 'name' => $user->name]],
-                'htmlContent' => $emailContent,
-            ]);
+            $brevo = new \Brevo\Brevo(env('BREVO_API_KEY'));
 
-            $apiInstance->sendTransacEmail($sendSmtpEmail);
+            $brevo->transactionalEmails->sendTransacEmail(
+                new \Brevo\TransactionalEmails\Requests\SendTransacEmailRequest([
+                    'subject'     => 'DrukRide Taxi - Password Reset Code',
+                    'sender'      => new \Brevo\TransactionalEmails\Types\SendTransacEmailRequestSender([
+                        'name'  => 'DrukRideTaxi',
+                        'email' => 'easyride6202@gmail.com',
+                    ]),
+                    'to' => [
+                        new \Brevo\TransactionalEmails\Types\SendTransacEmailRequestToItem([
+                            'email' => $request->email,
+                            'name'  => $user->name,
+                        ]),
+                    ],
+                    'htmlContent' => $emailContent,
+                ])
+            );
 
         } catch (\Exception $e) {
             return response()->json([
