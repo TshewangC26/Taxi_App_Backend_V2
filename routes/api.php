@@ -14,6 +14,7 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+Route::post('/get-username', [AuthController::class, 'getUsernameByEmail']);
 
 // Protected routes (require authentication token)
 Route::middleware('auth:sanctum')->group(function () {

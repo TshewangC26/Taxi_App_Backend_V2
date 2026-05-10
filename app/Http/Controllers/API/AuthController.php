@@ -270,7 +270,8 @@ class AuthController extends Controller
         }
 
         return response()->json([
-            'message' => 'Reset code sent to your email!'
+            'message'  => 'Reset code sent to your email!',
+            'userName' => $user->name,
         ], 200);
     }
 
@@ -306,6 +307,28 @@ class AuthController extends Controller
 
         \DB::table('password_resets')->where('email', $request->email)->delete();
 
-        return response()->json(['message' => 'Password reset successfully!'], 200);
+        return response()->json([
+            'message'  => 'Password reset successfully!',
+            'userName' => $user->name,
+        ], 200);
+    }
+
+    public function getUsernameByEmail(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user) {
+            return response()->json(['message' => 'User not found!'], 404);
+        }
+
+        return response()->json(['name' => $user->name], 200);
     }
 }
