@@ -304,9 +304,27 @@ class AdminController extends Controller
         $user = User::where('id', $id)->where('user_type', 'driver')->first();
         if (!$user) return response()->json(['message' => 'Driver not found'], 404);
 
+        // ✅ Get driver id before deleting
+        $driver   = Driver::where('user_id', $id)->first();
+        $driverId = $driver?->id;
+
         Booking::where('driver_id', $id)->delete();
         Driver::where('user_id', $id)->delete();
         $user->delete();
+
+        // ✅ Delete from Firebase Realtime Database
+        if ($driverId) {
+            try {
+                $firebaseUrl = env('FIREBASE_DATABASE_URL', 'https://taxiapp-e5f40-default-rtdb.asia-southeast1.firebasedatabase.app');
+                $ch = curl_init("{$firebaseUrl}/drivers/{$driverId}.json");
+                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'DELETE');
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_exec($ch);
+                curl_close($ch);
+            } catch (\Exception $e) {
+                \Log::error('Firebase delete error: ' . $e->getMessage());
+            }
+        }
 
         return response()->json(['message' => 'Driver deleted successfully'], 200);
     }
