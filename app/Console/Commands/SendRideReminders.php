@@ -73,10 +73,16 @@ class SendRideReminders extends Command
     private function sendFCM(string $fcmToken, string $title, string $body): void
     {
         try {
-            $credentialsPath = storage_path('firebase-adminsdk.json');
-            if (!file_exists($credentialsPath)) return;
-
-            $credentials = json_decode(file_get_contents($credentialsPath), true);
+            // ✅ Try environment variable first, fallback to file
+            $credentialsJson = env('FIREBASE_CREDENTIALS');
+            if ($credentialsJson) {
+                $credentials = json_decode($credentialsJson, true);
+            } else {
+                $credentialsPath = storage_path('firebase-adminsdk.json');
+                if (!file_exists($credentialsPath)) return;
+                $credentials = json_decode(file_get_contents($credentialsPath), true);
+            }
+            if (!$credentials) return;
 
             $now     = time();
             $header  = rtrim(strtr(base64_encode(json_encode(['alg' => 'RS256', 'typ' => 'JWT'])), '+/', '-_'), '=');
