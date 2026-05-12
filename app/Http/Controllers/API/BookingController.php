@@ -16,7 +16,6 @@ class BookingController extends Controller
     private function sendFCM(string $fcmToken, string $title, string $body, array $data = []): void
     {
         try {
-            // ✅ Try environment variable first, fallback to file
             $credentialsJson = env('FIREBASE_CREDENTIALS');
             if ($credentialsJson) {
                 $credentials = json_decode($credentialsJson, true);
@@ -88,6 +87,28 @@ class BookingController extends Controller
         }
     }
 
+    // ✅ Update Firebase booking status
+    private function updateFirebaseBookingStatus(int $bookingId, string $status, int $passengerId): void
+    {
+        try {
+            $firebaseUrl = env('FIREBASE_DATABASE_URL', 'https://taxiapp-e5f40-default-rtdb.asia-southeast1.firebasedatabase.app');
+            $data = json_encode([
+                'status'       => $status,
+                'passenger_id' => $passengerId,
+                'updated_at'   => round(microtime(true) * 1000),
+            ]);
+            $ch = curl_init("{$firebaseUrl}/bookings/{$bookingId}.json");
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_exec($ch);
+            curl_close($ch);
+        } catch (\Exception $e) {
+            \Log::error('Firebase update error: ' . $e->getMessage());
+        }
+    }
+
     // Create a new booking (Passenger)
     public function createBooking(Request $request)
     {
@@ -154,7 +175,7 @@ class BookingController extends Controller
             'passenger_longitude' => $request->passenger_longitude,
         ]);
 
-        // ✅ Notify driver — New booking received!
+        // ✅ Notify driver
         if ($driverId) {
             $driverUser = User::find($driverId);
             if ($driverUser && $driverUser->fcm_token) {
@@ -280,6 +301,9 @@ class BookingController extends Controller
             $driver->setBooked();
         }
 
+        // ✅ Update Firebase
+        $this->updateFirebaseBookingStatus($booking->id, 'accepted', $booking->passenger_id);
+
         // ✅ Notify passenger
         $passenger = User::find($booking->passenger_id);
         if ($passenger && $passenger->fcm_token) {
@@ -311,7 +335,10 @@ class BookingController extends Controller
         $driver = Driver::where('user_id', $request->user()->id)->first();
         $driver->setBooked();
 
-        // ✅ Notify passenger — Driver is coming!
+        // ✅ Update Firebase
+        $this->updateFirebaseBookingStatus($booking->id, 'in_progress', $booking->passenger_id);
+
+        // ✅ Notify passenger
         $passenger = User::find($booking->passenger_id);
         if ($passenger && $passenger->fcm_token) {
             $this->sendFCM(
@@ -342,6 +369,9 @@ class BookingController extends Controller
         $driver = Driver::where('user_id', $request->user()->id)->first();
         $driver->setAvailable();
 
+        // ✅ Update Firebase
+        $this->updateFirebaseBookingStatus($booking->id, 'completed', $booking->passenger_id);
+
         return response()->json(['message' => 'Ride completed! Passenger can now pay.', 'booking' => $booking], 200);
     }
 
@@ -362,6 +392,9 @@ class BookingController extends Controller
         }
 
         $booking->update(['status' => 'cancelled']);
+
+        // ✅ Update Firebase
+        $this->updateFirebaseBookingStatus($booking->id, 'cancelled', $booking->passenger_id);
 
         if ($booking->driver_id === $request->user()->id) {
             $driver = Driver::where('user_id', $request->user()->id)->first();

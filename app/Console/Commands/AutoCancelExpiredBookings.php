@@ -15,27 +15,25 @@ class AutoCancelExpiredBookings extends Command
 
     public function handle()
     {
-        // Find all pending NOW bookings older than 5 minutes
         $expiredBookings = Booking::where('status', 'pending')
             ->where('booking_type', 'now')
             ->where('created_at', '<', Carbon::now()->subMinutes(5))
             ->get();
 
-        // Group by driver to send one notification per driver
         $driverBookingCount = [];
 
         foreach ($expiredBookings as $booking) {
-            // Cancel the booking
             $booking->update(['status' => 'cancelled']);
 
-            // Set driver back to available
+            // ✅ Update Firebase booking status
+            $this->updateFirebaseBookingStatus($booking->id, 'cancelled', $booking->passenger_id);
+
             if ($booking->driver_id) {
                 $driver = Driver::where('user_id', $booking->driver_id)->first();
                 if ($driver) {
                     $driver->setAvailable();
                 }
 
-                // Count cancelled bookings per driver
                 if (!isset($driverBookingCount[$booking->driver_id])) {
                     $driverBookingCount[$booking->driver_id] = 0;
                 }
@@ -45,7 +43,6 @@ class AutoCancelExpiredBookings extends Command
             $this->info("Booking #{$booking->id} auto cancelled.");
         }
 
-        // ✅ Send ONE notification per driver
         foreach ($driverBookingCount as $driverUserId => $count) {
             $driverUser = User::find($driverUserId);
             if ($driverUser && $driverUser->fcm_token) {
@@ -61,10 +58,31 @@ class AutoCancelExpiredBookings extends Command
         $this->info('Auto cancel completed. Total: ' . $expiredBookings->count());
     }
 
+    // ✅ Update Firebase booking status
+    private function updateFirebaseBookingStatus(int $bookingId, string $status, int $passengerId): void
+    {
+        try {
+            $firebaseUrl = env('FIREBASE_DATABASE_URL', 'https://taxiapp-e5f40-default-rtdb.asia-southeast1.firebasedatabase.app');
+            $data = json_encode([
+                'status'       => $status,
+                'passenger_id' => $passengerId,
+                'updated_at'   => round(microtime(true) * 1000),
+            ]);
+            $ch = curl_init("{$firebaseUrl}/bookings/{$bookingId}.json");
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_exec($ch);
+            curl_close($ch);
+        } catch (\Exception $e) {
+            \Log::error('Firebase update error: ' . $e->getMessage());
+        }
+    }
+
     private function sendFCM(string $fcmToken, string $title, string $body): void
     {
         try {
-            // ✅ Try environment variable first, fallback to file
             $credentialsJson = env('FIREBASE_CREDENTIALS');
             if ($credentialsJson) {
                 $credentials = json_decode($credentialsJson, true);
