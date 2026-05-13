@@ -131,17 +131,19 @@ class AuthController extends Controller
 
     public function updateProfile(Request $request)
     {
+        $user = $request->user();
+
         $validator = Validator::make($request->all(), [
             'name'          => 'required|string|max:255',
             'phone'         => 'required|string',
+            // ✅ Email is optional, must be unique except for current user
+            'email'         => 'nullable|email|unique:users,email,' . $user->id,
             'profile_photo' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
-
-        $user = $request->user();
 
         if ($request->hasFile('profile_photo')) {
             if ($user->profile_photo) {
@@ -153,6 +155,12 @@ class AuthController extends Controller
 
         $user->name  = $request->name;
         $user->phone = $request->phone;
+
+        // ✅ Update email if provided
+        if ($request->email) {
+            $user->email = $request->email;
+        }
+
         $user->save();
 
         return response()->json([
