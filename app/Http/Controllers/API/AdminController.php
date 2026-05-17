@@ -23,6 +23,16 @@ class AdminController extends Controller
         return null;
     }
 
+    // ✅ Helper to get correct profile photo URL (Cloudinary or local)
+    private function getPhotoUrl($profilePhoto): ?string
+    {
+        if (!$profilePhoto) return null;
+        if (str_starts_with($profilePhoto, 'http')) {
+            return $profilePhoto;
+        }
+        return asset('storage/' . $profilePhoto);
+    }
+
     // ==================== DASHBOARD ====================
 
     public function getDashboardStats(Request $request)
@@ -240,9 +250,8 @@ class AdminController extends Controller
                     'email'          => $user->email,
                     'phone'          => $user->phone,
                     'created_at'     => $user->created_at,
-                    'profile_photo'  => $user->profile_photo
-                        ? asset('storage/' . $user->profile_photo)
-                        : null,
+                    // ✅ Fixed: handle Cloudinary URL
+                    'profile_photo'  => $this->getPhotoUrl($user->profile_photo),
                     'vehicle_type'   => $user->driver?->vehicle_type,
                     'vehicle_number' => $user->driver?->vehicle_number,
                     'license_number' => $user->driver?->license_number,
@@ -383,9 +392,8 @@ class AdminController extends Controller
                     'email'         => $user->email,
                     'phone'         => $user->phone,
                     'created_at'    => $user->created_at,
-                    'profile_photo' => $user->profile_photo
-                        ? asset('storage/' . $user->profile_photo)
-                        : null,
+                    // ✅ Fixed: handle Cloudinary URL
+                    'profile_photo' => $this->getPhotoUrl($user->profile_photo),
                     'total_rides'   => Booking::where('passenger_id', $user->id)
                         ->where('status', 'completed')
                         ->count(),
