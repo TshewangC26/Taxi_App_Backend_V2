@@ -29,7 +29,7 @@ class AuthController extends Controller
         $validator = Validator::make($request->all(), [
             'name'           => 'required|string|max:255',
             'email'          => 'required|string|email|max:255|unique:users',
-            'password'       => 'required|string|min:6',
+            'password'       => 'required|string|min:12',
             'user_type'      => 'required|in:passenger,driver',
             'phone'          => 'required|string',
             'vehicle_type'   => 'required_if:user_type,driver|in:4-seater,7-seater,8-seater',
