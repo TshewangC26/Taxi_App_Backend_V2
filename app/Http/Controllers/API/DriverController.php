@@ -12,6 +12,16 @@ use Illuminate\Support\Facades\Storage;
 
 class DriverController extends Controller
 {
+    // ✅ Helper to get correct URL (Cloudinary or local)
+    private function getQrUrl($qrCodeImage): ?string
+    {
+        if (!$qrCodeImage) return null;
+        if (str_starts_with($qrCodeImage, 'http')) {
+            return $qrCodeImage;
+        }
+        return asset('storage/' . $qrCodeImage);
+    }
+
     // Toggle driver availability (online/offline)
     public function toggleAvailability(Request $request)
     {
@@ -75,9 +85,8 @@ class DriverController extends Controller
                 'account_holder_name'   => $driver->account_holder_name,
                 'account_number'        => $driver->account_number,
                 'mobile_payment_number' => $driver->mobile_payment_number,
-                'qr_code_image'         => $driver->qr_code_image
-                    ? asset('storage/' . $driver->qr_code_image)
-                    : null,
+                // ✅ Fixed: handle Cloudinary URL
+                'qr_code_image'         => $this->getQrUrl($driver->qr_code_image),
             ],
             'stats' => [
                 'total_rides'    => $totalRides,
@@ -86,7 +95,7 @@ class DriverController extends Controller
         ], 200);
     }
 
-    // ── ADDED: Update driver profile (name, phone, email) ─────────────
+    // Update driver profile
     public function updateProfile(Request $request)
     {
         $user = $request->user();
@@ -114,13 +123,11 @@ class DriverController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // Update User table fields
         if ($request->has('name'))  $user->name  = $request->name;
         if ($request->has('email')) $user->email = $request->email;
         if ($request->has('phone')) $user->phone = $request->phone;
         $user->save();
 
-        // Update Driver table fields
         $driverFields = ['vehicle_type', 'vehicle_number', 'license_number'];
         $driverData   = $request->only($driverFields);
         if (!empty($driverData)) {
@@ -217,17 +224,9 @@ class DriverController extends Controller
         ], 200);
     }
 
-    // Upload QR code image
+    // ✅ Upload QR code - now accepts Cloudinary URL
     public function uploadQRCode(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'qr_code' => 'required|image|mimes:jpeg,png,jpg|max:2048',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
         $user = $request->user();
 
         if ($user->user_type !== 'driver') {
@@ -240,7 +239,25 @@ class DriverController extends Controller
             return response()->json(['message' => 'Driver profile not found'], 404);
         }
 
-        if ($driver->qr_code_image) {
+        // ✅ Handle Cloudinary URL (new way)
+        if ($request->qr_code_url) {
+            $driver->update(['qr_code_image' => $request->qr_code_url]);
+            return response()->json([
+                'message'     => 'QR code uploaded successfully',
+                'qr_code_url' => $request->qr_code_url,
+            ], 200);
+        }
+
+        // Handle file upload (old way fallback)
+        $validator = Validator::make($request->all(), [
+            'qr_code' => 'required|image|mimes:jpeg,png,jpg|max:2048',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        if ($driver->qr_code_image && !str_starts_with($driver->qr_code_image, 'http')) {
             Storage::disk('public')->delete($driver->qr_code_image);
         }
 
@@ -274,9 +291,8 @@ class DriverController extends Controller
                 'account_holder_name'   => $driver->account_holder_name,
                 'account_number'        => $driver->account_number,
                 'mobile_payment_number' => $driver->mobile_payment_number,
-                'qr_code_image'         => $driver->qr_code_image
-                    ? asset('storage/' . $driver->qr_code_image)
-                    : null,
+                // ✅ Fixed: handle Cloudinary URL
+                'qr_code_image'         => $this->getQrUrl($driver->qr_code_image),
             ]
         ], 200);
     }
