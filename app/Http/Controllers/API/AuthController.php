@@ -12,6 +12,18 @@ use Illuminate\Support\Facades\Storage;
 
 class AuthController extends Controller
 {
+    // ✅ Helper to get correct profile photo URL (Firebase or local)
+    private function getPhotoUrl($profilePhoto): ?string
+    {
+        if (!$profilePhoto) return null;
+        // If it's already a full URL (Firebase), return as is
+        if (str_starts_with($profilePhoto, 'http')) {
+            return $profilePhoto;
+        }
+        // Otherwise it's a local storage path
+        return asset('storage/' . $profilePhoto);
+    }
+
     public function register(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -56,10 +68,8 @@ class AuthController extends Controller
                 'name'          => $user->name,
                 'email'         => $user->email,
                 'phone'         => $user->phone,
-                'profile_photo' => $user->profile_photo
-                    ? asset('storage/' . $user->profile_photo)
-                    : null,
-                'user_type' => $user->user_type,
+                'profile_photo' => $this->getPhotoUrl($user->profile_photo),
+                'user_type'     => $user->user_type,
             ],
             'token' => $token,
         ], 201);
@@ -97,10 +107,8 @@ class AuthController extends Controller
                 'name'          => $user->name,
                 'email'         => $user->email,
                 'phone'         => $user->phone,
-                'profile_photo' => $user->profile_photo
-                    ? asset('storage/' . $user->profile_photo)
-                    : null,
-                'user_type' => $user->user_type,
+                'profile_photo' => $this->getPhotoUrl($user->profile_photo),
+                'user_type'     => $user->user_type,
             ],
             'token' => $token,
         ], 200);
@@ -121,10 +129,8 @@ class AuthController extends Controller
                 'name'          => $user->name,
                 'email'         => $user->email,
                 'phone'         => $user->phone,
-                'profile_photo' => $user->profile_photo
-                    ? asset('storage/' . $user->profile_photo)
-                    : null,
-                'user_type' => $user->user_type,
+                'profile_photo' => $this->getPhotoUrl($user->profile_photo),
+                'user_type'     => $user->user_type,
             ]
         ], 200);
     }
@@ -134,19 +140,24 @@ class AuthController extends Controller
         $user = $request->user();
 
         $validator = Validator::make($request->all(), [
-            'name'          => 'required|string|max:255',
-            'phone'         => 'required|string',
-            // ✅ Email is optional, must be unique except for current user
-            'email'         => 'nullable|email|unique:users,email,' . $user->id,
-            'profile_photo' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+            'name'              => 'required|string|max:255',
+            'phone'             => 'required|string',
+            'email'             => 'nullable|email|unique:users,email,' . $user->id,
+            'profile_photo'     => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+            'profile_photo_url' => 'nullable|string', // ✅ Firebase URL
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        if ($request->hasFile('profile_photo')) {
-            if ($user->profile_photo) {
+        // ✅ Handle Firebase URL (new way)
+        if ($request->profile_photo_url) {
+            $user->profile_photo = $request->profile_photo_url;
+        }
+        // Handle file upload (old way fallback)
+        elseif ($request->hasFile('profile_photo')) {
+            if ($user->profile_photo && !str_starts_with($user->profile_photo, 'http')) {
                 Storage::disk('public')->delete($user->profile_photo);
             }
             $path = $request->file('profile_photo')->storePublicly('profiles', 'public');
@@ -156,7 +167,6 @@ class AuthController extends Controller
         $user->name  = $request->name;
         $user->phone = $request->phone;
 
-        // ✅ Update email if provided
         if ($request->email) {
             $user->email = $request->email;
         }
@@ -170,10 +180,8 @@ class AuthController extends Controller
                 'name'          => $user->name,
                 'email'         => $user->email,
                 'phone'         => $user->phone,
-                'profile_photo' => $user->profile_photo
-                    ? asset('storage/' . $user->profile_photo)
-                    : null,
-                'user_type' => $user->user_type,
+                'profile_photo' => $this->getPhotoUrl($user->profile_photo),
+                'user_type'     => $user->user_type,
             ]
         ], 200);
     }
@@ -187,10 +195,8 @@ class AuthController extends Controller
                 'name'          => $user->name,
                 'email'         => $user->email,
                 'phone'         => $user->phone,
-                'profile_photo' => $user->profile_photo
-                    ? asset('storage/' . $user->profile_photo)
-                    : null,
-                'user_type' => $user->user_type,
+                'profile_photo' => $this->getPhotoUrl($user->profile_photo),
+                'user_type'     => $user->user_type,
             ]
         ], 200);
     }
