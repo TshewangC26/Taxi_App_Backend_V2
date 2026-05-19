@@ -87,7 +87,7 @@ class BookingController extends Controller
         }
     }
 
-    // ✅ Update Firebase booking status
+    // ── Update Firebase booking status ──
     private function updateFirebaseBookingStatus(int $bookingId, string $status, int $passengerId): void
     {
         try {
@@ -175,7 +175,7 @@ class BookingController extends Controller
             'passenger_longitude' => $request->passenger_longitude,
         ]);
 
-        // ✅ Notify driver
+        // Notify driver
         if ($driverId) {
             $driverUser = User::find($driverId);
             if ($driverUser && $driverUser->fcm_token) {
@@ -273,10 +273,19 @@ class BookingController extends Controller
             ->orderBy('created_at', 'asc')
             ->get();
 
+        // ── Also include accepted scheduled bookings ──
+        $acceptedScheduled = Booking::where('driver_id', $user->id)
+            ->where('status', 'accepted')
+            ->where('booking_type', 'scheduled')
+            ->with(['passenger'])
+            ->orderBy('scheduled_date', 'asc')
+            ->get();
+
         return response()->json([
-            'now_bookings'       => $nowBookings,
-            'scheduled_bookings' => $scheduledBookings,
-            'my_active_bookings' => $myActiveBookings,
+            'now_bookings'               => $nowBookings,
+            'scheduled_bookings'         => $scheduledBookings,
+            'my_active_bookings'         => $myActiveBookings,
+            'accepted_scheduled_bookings'=> $acceptedScheduled,
         ], 200);
     }
 
@@ -301,10 +310,8 @@ class BookingController extends Controller
             $driver->setBooked();
         }
 
-        // ✅ Update Firebase
         $this->updateFirebaseBookingStatus($booking->id, 'accepted', $booking->passenger_id);
 
-        // ✅ Notify passenger
         $passenger = User::find($booking->passenger_id);
         if ($passenger && $passenger->fcm_token) {
             $message = $booking->booking_type === 'scheduled'
@@ -335,10 +342,8 @@ class BookingController extends Controller
         $driver = Driver::where('user_id', $request->user()->id)->first();
         $driver->setBooked();
 
-        // ✅ Update Firebase
         $this->updateFirebaseBookingStatus($booking->id, 'in_progress', $booking->passenger_id);
 
-        // ✅ Notify passenger
         $passenger = User::find($booking->passenger_id);
         if ($passenger && $passenger->fcm_token) {
             $this->sendFCM(
@@ -369,13 +374,12 @@ class BookingController extends Controller
         $driver = Driver::where('user_id', $request->user()->id)->first();
         $driver->setAvailable();
 
-        // ✅ Update Firebase
         $this->updateFirebaseBookingStatus($booking->id, 'completed', $booking->passenger_id);
 
         return response()->json(['message' => 'Ride completed! Passenger can now pay.', 'booking' => $booking], 200);
     }
 
-    // Cancel a booking (Driver or Passenger)
+    // Cancel a booking (Driver or Passenger) — now accepts cancellation_reason
     public function cancelBooking(Request $request, $id)
     {
         $booking = Booking::find($id);
@@ -391,22 +395,58 @@ class BookingController extends Controller
             return response()->json(['message' => 'Cannot cancel completed booking'], 400);
         }
 
-        $booking->update(['status' => 'cancelled']);
+        // ── Save cancellation reason if provided ──
+        $reason = $request->input('cancellation_reason', null);
 
-        // ✅ Update Firebase
+        $booking->update([
+            'status'               => 'cancelled',
+            'cancellation_reason'  => $reason,
+        ]);
+
         $this->updateFirebaseBookingStatus($booking->id, 'cancelled', $booking->passenger_id);
 
-        if ($booking->driver_id === $request->user()->id) {
-            $driver = Driver::where('user_id', $request->user()->id)->first();
-            $driver->setAvailable();
-        }
+        // ── Notify the other party with the reason ──
+        $cancelledByDriver    = $booking->driver_id === $request->user()->id;
+        $cancelledByPassenger = $booking->passenger_id === $request->user()->id;
 
-        if ($booking->passenger_id === $request->user()->id && $booking->driver_id) {
-            $driver = Driver::where('user_id', $booking->driver_id)->first();
+        $reasonText = $reason ? " Reason: {$reason}" : '';
+
+        if ($cancelledByDriver) {
+            // Notify passenger
+            $passenger = User::find($booking->passenger_id);
+            if ($passenger && $passenger->fcm_token) {
+                $this->sendFCM(
+                    $passenger->fcm_token,
+                    'Booking Cancelled',
+                    "Driver cancelled your scheduled ride.{$reasonText}",
+                    ['booking_id' => (string) $booking->id, 'type' => 'cancelled']
+                );
+            }
+            $driver = Driver::where('user_id', $request->user()->id)->first();
             if ($driver) $driver->setAvailable();
         }
 
-        return response()->json(['message' => 'Booking cancelled', 'booking' => $booking], 200);
+        if ($cancelledByPassenger) {
+            // Notify driver
+            if ($booking->driver_id) {
+                $driverUser = User::find($booking->driver_id);
+                if ($driverUser && $driverUser->fcm_token) {
+                    $this->sendFCM(
+                        $driverUser->fcm_token,
+                        'Booking Cancelled',
+                        "Passenger cancelled the scheduled ride.{$reasonText}",
+                        ['booking_id' => (string) $booking->id, 'type' => 'cancelled']
+                    );
+                }
+                $driver = Driver::where('user_id', $booking->driver_id)->first();
+                if ($driver) $driver->setAvailable();
+            }
+        }
+
+        return response()->json([
+            'message' => 'Booking cancelled',
+            'booking' => $booking
+        ], 200);
     }
 
     // Delete a booking (Passenger)
