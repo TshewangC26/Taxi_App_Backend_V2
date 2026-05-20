@@ -85,8 +85,10 @@ class DriverController extends Controller
                 'account_holder_name'   => $driver->account_holder_name,
                 'account_number'        => $driver->account_number,
                 'mobile_payment_number' => $driver->mobile_payment_number,
-                // ✅ Fixed: handle Cloudinary URL
                 'qr_code_image'         => $this->getQrUrl($driver->qr_code_image),
+                // ✅ Rating fields
+                'average_rating'        => $driver->average_rating ?? 0,
+                'total_ratings'         => $driver->total_ratings ?? 0,
             ],
             'stats' => [
                 'total_rides'    => $totalRides,
@@ -239,7 +241,6 @@ class DriverController extends Controller
             return response()->json(['message' => 'Driver profile not found'], 404);
         }
 
-        // ✅ Handle Cloudinary URL (new way)
         if ($request->qr_code_url) {
             $driver->update(['qr_code_image' => $request->qr_code_url]);
             return response()->json([
@@ -248,7 +249,6 @@ class DriverController extends Controller
             ], 200);
         }
 
-        // Handle file upload (old way fallback)
         $validator = Validator::make($request->all(), [
             'qr_code' => 'required|image|mimes:jpeg,png,jpg|max:2048',
         ]);
@@ -291,7 +291,6 @@ class DriverController extends Controller
                 'account_holder_name'   => $driver->account_holder_name,
                 'account_number'        => $driver->account_number,
                 'mobile_payment_number' => $driver->mobile_payment_number,
-                // ✅ Fixed: handle Cloudinary URL
                 'qr_code_image'         => $this->getQrUrl($driver->qr_code_image),
             ]
         ], 200);
@@ -325,7 +324,7 @@ class DriverController extends Controller
         ], 200);
     }
 
-    // Get all drivers status (for passenger to see)
+    // ✅ Get all drivers status — now includes average_rating and total_ratings
     public function getAllDriversStatus(Request $request)
     {
         $drivers = Driver::with('user')->get();
@@ -339,6 +338,9 @@ class DriverController extends Controller
                 'status'         => $driver->status ?? 'offline',
                 'latitude'       => $driver->latitude,
                 'longitude'      => $driver->longitude,
+                // ✅ Rating fields for passenger booking screen
+                'average_rating' => $driver->average_rating ?? 0,
+                'total_ratings'  => $driver->total_ratings ?? 0,
             ];
         });
 
@@ -425,6 +427,9 @@ class DriverController extends Controller
                 'latitude'       => $driver->latitude,
                 'longitude'      => $driver->longitude,
                 'distance_km'    => $distance,
+                // ✅ Rating fields
+                'average_rating' => $driver->average_rating ?? 0,
+                'total_ratings'  => $driver->total_ratings ?? 0,
             ];
         })->sortBy('distance_km')->values();
 
