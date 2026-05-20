@@ -20,6 +20,9 @@ class Booking extends Model
         'scheduled_time',
         'passenger_latitude',
         'passenger_longitude',
+        'cancellation_reason', // ✅
+        'rating',              // ✅
+        'rating_comment',      // ✅
     ];
 
     // Relationship: Booking belongs to a Passenger (User)
