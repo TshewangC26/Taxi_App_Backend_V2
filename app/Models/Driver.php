@@ -21,6 +21,8 @@ class Driver extends Model
         'latitude',
         'longitude',
         'location_updated_at',
+        'average_rating',  // ✅
+        'total_ratings',   // ✅
     ];
 
     // Status constants
@@ -74,7 +76,6 @@ class Driver extends Model
     }
 
     // Helper: calculate distance from a point in km
-    // Uses Haversine formula
     public function distanceFrom($latitude, $longitude)
     {
         if (!$this->latitude || !$this->longitude) {
