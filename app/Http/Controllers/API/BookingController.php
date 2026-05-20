@@ -282,10 +282,10 @@ class BookingController extends Controller
             ->get();
 
         return response()->json([
-            'now_bookings'               => $nowBookings,
-            'scheduled_bookings'         => $scheduledBookings,
-            'my_active_bookings'         => $myActiveBookings,
-            'accepted_scheduled_bookings'=> $acceptedScheduled,
+            'now_bookings'                => $nowBookings,
+            'scheduled_bookings'          => $scheduledBookings,
+            'my_active_bookings'          => $myActiveBookings,
+            'accepted_scheduled_bookings' => $acceptedScheduled,
         ], 200);
     }
 
@@ -379,7 +379,7 @@ class BookingController extends Controller
         return response()->json(['message' => 'Ride completed! Passenger can now pay.', 'booking' => $booking], 200);
     }
 
-    // Cancel a booking (Driver or Passenger) — now accepts cancellation_reason
+    // Cancel a booking (Driver or Passenger)
     public function cancelBooking(Request $request, $id)
     {
         $booking = Booking::find($id);
@@ -395,24 +395,20 @@ class BookingController extends Controller
             return response()->json(['message' => 'Cannot cancel completed booking'], 400);
         }
 
-        // ── Save cancellation reason if provided ──
         $reason = $request->input('cancellation_reason', null);
 
         $booking->update([
-            'status'               => 'cancelled',
-            'cancellation_reason'  => $reason,
+            'status'              => 'cancelled',
+            'cancellation_reason' => $reason,
         ]);
 
         $this->updateFirebaseBookingStatus($booking->id, 'cancelled', $booking->passenger_id);
 
-        // ── Notify the other party with the reason ──
         $cancelledByDriver    = $booking->driver_id === $request->user()->id;
         $cancelledByPassenger = $booking->passenger_id === $request->user()->id;
-
-        $reasonText = $reason ? " Reason: {$reason}" : '';
+        $reasonText           = $reason ? " Reason: {$reason}" : '';
 
         if ($cancelledByDriver) {
-            // Notify passenger
             $passenger = User::find($booking->passenger_id);
             if ($passenger && $passenger->fcm_token) {
                 $this->sendFCM(
@@ -427,7 +423,6 @@ class BookingController extends Controller
         }
 
         if ($cancelledByPassenger) {
-            // Notify driver
             if ($booking->driver_id) {
                 $driverUser = User::find($booking->driver_id);
                 if ($driverUser && $driverUser->fcm_token) {
@@ -464,5 +459,65 @@ class BookingController extends Controller
         $booking->delete();
 
         return response()->json(['message' => 'Booking deleted successfully'], 200);
+    }
+
+    // ✅ Rate a driver (Passenger only)
+    public function rateDriver(Request $request, $id)
+    {
+        $booking = Booking::find($id);
+
+        if (!$booking) {
+            return response()->json(['message' => 'Booking not found'], 404);
+        }
+
+        // Only the passenger of this booking can rate
+        if ($booking->passenger_id !== $request->user()->id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        // Only completed bookings can be rated
+        if ($booking->status !== 'completed') {
+            return response()->json(['message' => 'Can only rate completed rides'], 400);
+        }
+
+        // Cannot rate twice
+        if ($booking->rating !== null) {
+            return response()->json(['message' => 'You have already rated this ride'], 400);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'rating'         => 'required|integer|min:1|max:5',
+            'rating_comment' => 'nullable|string|max:500',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        // Save rating to booking
+        $booking->update([
+            'rating'         => $request->rating,
+            'rating_comment' => $request->rating_comment,
+        ]);
+
+        // Recalculate driver's average rating
+        $driver = Driver::where('user_id', $booking->driver_id)->first();
+        if ($driver) {
+            $avg   = Booking::where('driver_id', $booking->driver_id)
+                        ->whereNotNull('rating')
+                        ->avg('rating');
+            $total = Booking::where('driver_id', $booking->driver_id)
+                        ->whereNotNull('rating')
+                        ->count();
+            $driver->update([
+                'average_rating' => round($avg, 2),
+                'total_ratings'  => $total,
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Rating submitted successfully',
+            'rating'  => $request->rating,
+        ], 200);
     }
 }
