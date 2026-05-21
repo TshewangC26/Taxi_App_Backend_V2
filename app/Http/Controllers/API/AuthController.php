@@ -32,7 +32,7 @@ class AuthController extends Controller
             'password'       => 'required|string|min:12',
             'user_type'      => 'required|in:passenger,driver',
             'phone'          => 'required|string',
-            'vehicle_type' => 'required|string',
+            'vehicle_type' => 'required_if:user_type,driver|nullable|string',
             'vehicle_number' => 'required_if:user_type,driver|string',
             'license_number' => 'required_if:user_type,driver|string',
         ]);
