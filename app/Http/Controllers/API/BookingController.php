@@ -115,7 +115,7 @@ class BookingController extends Controller
         $validator = Validator::make($request->all(), [
             'pickup_location'     => 'required|string',
             'dropoff_location'    => 'required|string',
-            'vehicle_type'        => 'required|in:4-seater,7-seater,8-seater',
+            'vehicle_type'        => 'required|string',
             'booking_type'        => 'required|in:now,scheduled',
             'scheduled_date'      => 'required_if:booking_type,scheduled|date',
             'scheduled_time'      => 'required_if:booking_type,scheduled',
@@ -525,4 +525,21 @@ class BookingController extends Controller
             'rating'  => $request->rating,
         ], 200);
     }
+
+    // Get single booking
+public function getBooking(Request $request, $id)
+{
+    $booking = Booking::find($id);
+
+    if (!$booking) {
+        return response()->json(['message' => 'Booking not found'], 404);
+    }
+
+    if ($booking->passenger_id !== $request->user()->id &&
+        $booking->driver_id !== $request->user()->id) {
+        return response()->json(['message' => 'Unauthorized'], 403);
+    }
+
+    return response()->json(['booking' => $booking], 200);
+}
 }

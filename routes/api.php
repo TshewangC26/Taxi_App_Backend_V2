@@ -8,6 +8,7 @@ use App\Http\Controllers\API\PaymentController;
 use App\Http\Controllers\API\DriverController;
 use App\Http\Controllers\API\AdminController;
 use App\Http\Controllers\RouteController;
+use App\Models\VehicleType;
 
 // Public routes (no authentication required)
 Route::post('/register', [AuthController::class, 'register']);
@@ -15,6 +16,12 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 Route::post('/get-username', [AuthController::class, 'getUsernameByEmail']);
+
+// ✅ Public vehicle types — no auth needed (for register + book ride screens)
+Route::get('/vehicle-types', function () {
+    $types = VehicleType::where('is_active', true)->orderBy('name')->get();
+    return response()->json(['vehicle_types' => $types], 200);
+});
 
 // Protected routes (require authentication token)
 Route::middleware('auth:sanctum')->group(function () {
@@ -38,6 +45,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/bookings/{id}/cancel', [BookingController::class, 'cancelBooking']);
     Route::delete('/bookings/{id}', [BookingController::class, 'deleteBooking']);
     Route::post('/bookings/{id}/rate', [BookingController::class, 'rateDriver']);
+    Route::get('/bookings/{id}', [BookingController::class, 'getBooking']);
 
     // Payment routes
     Route::post('/payments', [PaymentController::class, 'createPayment']);
@@ -48,7 +56,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Driver Profile routes
     Route::get('/driver/profile', [DriverController::class, 'getProfile']);
-    Route::post('/driver/profile/update', [DriverController::class, 'updateProfile']); // ← ADDED
+    Route::post('/driver/profile/update', [DriverController::class, 'updateProfile']);
     Route::post('/driver/toggle-availability', [DriverController::class, 'toggleAvailability']);
     Route::put('/driver/vehicle-info', [DriverController::class, 'updateVehicleInfo']);
     Route::put('/driver/bank-details', [DriverController::class, 'updateBankDetails']);
@@ -75,6 +83,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/routes', [AdminController::class, 'createRoute']);
     Route::put('/admin/routes/{id}', [AdminController::class, 'updateRoute']);
     Route::delete('/admin/routes/{id}', [AdminController::class, 'deleteRoute']);
+
+    // ✅ Vehicle type management (admin only)
+    Route::get('/admin/vehicle-types', [AdminController::class, 'getVehicleTypes']);
+    Route::post('/admin/vehicle-types', [AdminController::class, 'createVehicleType']);
+    Route::put('/admin/vehicle-types/{id}', [AdminController::class, 'updateVehicleType']);
+    Route::delete('/admin/vehicle-types/{id}', [AdminController::class, 'deleteVehicleType']);
 
     // Driver management
     Route::get('/admin/drivers', [AdminController::class, 'getDrivers']);

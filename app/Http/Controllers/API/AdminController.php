@@ -11,6 +11,7 @@ use App\Models\Booking;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Hash;
+use App\Models\VehicleType;
 
 class AdminController extends Controller
 {
@@ -481,4 +482,71 @@ class AdminController extends Controller
         $users = User::with('driver')->orderBy('created_at', 'desc')->get();
         return response()->json(['users' => $users], 200);
     }
+
+    // ==================== VEHICLE TYPE MANAGEMENT ====================
+
+public function getVehicleTypes(Request $request)
+{
+    if ($error = $this->checkAdmin($request)) return $error;
+    $types = VehicleType::orderBy('name')->get();
+    return response()->json(['vehicle_types' => $types], 200);
 }
+
+public function createVehicleType(Request $request)
+{
+    if ($error = $this->checkAdmin($request)) return $error;
+
+    $validator = Validator::make($request->all(), [
+        'name'         => 'required|string|unique:vehicle_types,name',
+        'display_name' => 'required|string',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json(['errors' => $validator->errors()], 422);
+    }
+
+    $type = VehicleType::create([
+        'name'         => strtolower(str_replace(' ', '-', $request->name)),
+        'display_name' => $request->display_name,
+        'is_active'    => true,
+    ]);
+
+    return response()->json(['message' => 'Vehicle type created', 'vehicle_type' => $type], 201);
+}
+
+public function updateVehicleType(Request $request, $id)
+{
+    if ($error = $this->checkAdmin($request)) return $error;
+
+    $validator = Validator::make($request->all(), [
+        'display_name' => 'required|string',
+        'is_active'    => 'required|boolean',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json(['errors' => $validator->errors()], 422);
+    }
+
+    $type = VehicleType::find($id);
+    if (!$type) return response()->json(['message' => 'Vehicle type not found'], 404);
+
+    $type->update([
+        'display_name' => $request->display_name,
+        'is_active'    => $request->is_active,
+    ]);
+
+    return response()->json(['message' => 'Vehicle type updated', 'vehicle_type' => $type], 200);
+}
+
+public function deleteVehicleType(Request $request, $id)
+{
+    if ($error = $this->checkAdmin($request)) return $error;
+
+    $type = VehicleType::find($id);
+    if (!$type) return response()->json(['message' => 'Vehicle type not found'], 404);
+
+    $type->delete();
+    return response()->json(['message' => 'Vehicle type deleted'], 200);
+}
+}
+
