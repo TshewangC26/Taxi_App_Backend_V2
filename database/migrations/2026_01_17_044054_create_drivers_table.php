@@ -11,7 +11,7 @@ return new class extends Migration
             Schema::create('drivers', function (Blueprint $table) {
                 $table->id();
                 $table->foreignId('user_id')->constrained()->onDelete('cascade');
-                $table->enum('vehicle_type', ['4-seater', '7-seater', '8-seater']);
+                $table->string('vehicle_type');
                 $table->string('vehicle_number');
                 $table->string('license_number');
                 $table->boolean('is_available')->default(false);

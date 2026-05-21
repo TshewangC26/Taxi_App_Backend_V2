@@ -9,6 +9,8 @@ use App\Models\Driver;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use App\Models\RoutePrice;
+use App\Models\VehicleType;
 
 class BookingController extends Controller
 {
@@ -137,8 +139,11 @@ class BookingController extends Controller
             return response()->json(['message' => 'Route not found'], 404);
         }
 
-        $priceField     = 'price_' . str_replace('-', '_', $request->vehicle_type);
-        $estimatedPrice = $route->$priceField;
+        $vehicleType    = VehicleType::where('name', $request->vehicle_type)->first();
+        $routePrice     = RoutePrice::where('route_id', $route->id)
+                            ->where('vehicle_type_id', $vehicleType?->id)
+                            ->first();
+        $estimatedPrice = $routePrice?->price ?? 0;                   
         $status         = 'pending';
         $driverId       = null;
 
