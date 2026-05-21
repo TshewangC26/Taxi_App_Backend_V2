@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Driver;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
@@ -16,11 +17,9 @@ class AuthController extends Controller
     private function getPhotoUrl($profilePhoto): ?string
     {
         if (!$profilePhoto) return null;
-        // If it's already a full URL (Firebase), return as is
         if (str_starts_with($profilePhoto, 'http')) {
             return $profilePhoto;
         }
-        // Otherwise it's a local storage path
         return asset('storage/' . $profilePhoto);
     }
 
@@ -32,7 +31,7 @@ class AuthController extends Controller
             'password'       => 'required|string|min:12',
             'user_type'      => 'required|in:passenger,driver',
             'phone'          => 'required|string',
-            'vehicle_type' => 'required_if:user_type,driver|nullable|string',
+            'vehicle_type'   => 'required_if:user_type,driver|nullable|string',
             'vehicle_number' => 'required_if:user_type,driver|string',
             'license_number' => 'required_if:user_type,driver|string',
         ]);
@@ -41,22 +40,33 @@ class AuthController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $user = User::create([
-            'name'      => $request->name,
-            'email'     => $request->email,
-            'password'  => Hash::make($request->password),
-            'user_type' => $request->user_type,
-            'phone'     => $request->phone,
-        ]);
+        try {
+            DB::beginTransaction();
 
-        if ($request->user_type === 'driver') {
-            Driver::create([
-                'user_id'        => $user->id,
-                'vehicle_type'   => $request->vehicle_type,
-                'vehicle_number' => $request->vehicle_number,
-                'license_number' => $request->license_number,
-                'is_available'   => false,
+            $user = User::create([
+                'name'      => $request->name,
+                'email'     => $request->email,
+                'password'  => Hash::make($request->password),
+                'user_type' => $request->user_type,
+                'phone'     => $request->phone,
             ]);
+
+            if ($request->user_type === 'driver') {
+                Driver::create([
+                    'user_id'        => $user->id,
+                    'vehicle_type'   => $request->vehicle_type,
+                    'vehicle_number' => $request->vehicle_number,
+                    'license_number' => $request->license_number,
+                    'is_available'   => false,
+                    'status'         => 'offline',
+                ]);
+            }
+
+            DB::commit();
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Registration failed: ' . $e->getMessage()], 500);
         }
 
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -144,19 +154,16 @@ class AuthController extends Controller
             'phone'             => 'required|string',
             'email'             => 'nullable|email|unique:users,email,' . $user->id,
             'profile_photo'     => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
-            'profile_photo_url' => 'nullable|string', // ✅ Firebase URL
+            'profile_photo_url' => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // ✅ Handle Firebase URL (new way)
         if ($request->profile_photo_url) {
             $user->profile_photo = $request->profile_photo_url;
-        }
-        // Handle file upload (old way fallback)
-        elseif ($request->hasFile('profile_photo')) {
+        } elseif ($request->hasFile('profile_photo')) {
             if ($user->profile_photo && !str_starts_with($user->profile_photo, 'http')) {
                 Storage::disk('public')->delete($user->profile_photo);
             }
