@@ -8,10 +8,11 @@ use App\Models\Route;
 use App\Models\User;
 use App\Models\Driver;
 use App\Models\Booking;
+use App\Models\RoutePrice;
+use App\Models\VehicleType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Hash;
-use App\Models\VehicleType;
 
 class AdminController extends Controller
 {
@@ -141,23 +142,40 @@ class AdminController extends Controller
 
     // ==================== ROUTE MANAGEMENT ====================
 
+    // ✅ Returns routes with dynamic prices from route_prices table
     public function getRoutes(Request $request)
     {
         if ($error = $this->checkAdmin($request)) return $error;
-        $routes = Route::orderBy('pickup_location')->get();
+
+        $routes = Route::orderBy('pickup_location')->get()->map(function ($route) {
+            $prices = RoutePrice::where('route_id', $route->id)
+                ->with('vehicleType')
+                ->get()
+                ->mapWithKeys(function ($rp) {
+                    return [$rp->vehicleType->name => [
+                        'id'    => $rp->vehicle_type_id,
+                        'price' => $rp->price,
+                    ]];
+                });
+            $routeArray           = $route->toArray();
+            $routeArray['prices'] = $prices;
+            return $routeArray;
+        });
+
         return response()->json(['routes' => $routes], 200);
     }
 
+    // ✅ Creates route with dynamic prices
     public function createRoute(Request $request)
     {
         if ($error = $this->checkAdmin($request)) return $error;
 
         $validator = Validator::make($request->all(), [
-            'pickup_location'  => 'required|string',
-            'dropoff_location' => 'required|string',
-            'price_4_seater'   => 'required|numeric|min:0',
-            'price_7_seater'   => 'required|numeric|min:0',
-            'price_8_seater'   => 'required|numeric|min:0',
+            'pickup_location'          => 'required|string',
+            'dropoff_location'         => 'required|string',
+            'prices'                   => 'required|array',
+            'prices.*.vehicle_type_id' => 'required|integer',
+            'prices.*.price'           => 'required|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -175,30 +193,36 @@ class AdminController extends Controller
         $route = Route::create([
             'pickup_location'  => $request->pickup_location,
             'dropoff_location' => $request->dropoff_location,
-            'price_4_seater'   => $request->price_4_seater,
-            'price_7_seater'   => $request->price_7_seater,
-            'price_8_seater'   => $request->price_8_seater,
+            'price_4_seater'   => 0,
+            'price_7_seater'   => 0,
+            'price_8_seater'   => 0,
             'is_active'        => true,
             'created_by'       => $request->user()->id,
         ]);
 
-        return response()->json([
-            'message' => 'Route created',
-            'route'   => $route
-        ], 201);
+        foreach ($request->prices as $price) {
+            RoutePrice::create([
+                'route_id'        => $route->id,
+                'vehicle_type_id' => $price['vehicle_type_id'],
+                'price'           => $price['price'],
+            ]);
+        }
+
+        return response()->json(['message' => 'Route created', 'route' => $route], 201);
     }
 
+    // ✅ Updates route with dynamic prices
     public function updateRoute(Request $request, $id)
     {
         if ($error = $this->checkAdmin($request)) return $error;
 
         $validator = Validator::make($request->all(), [
-            'pickup_location'  => 'required|string',
-            'dropoff_location' => 'required|string',
-            'price_4_seater'   => 'required|numeric|min:0',
-            'price_7_seater'   => 'required|numeric|min:0',
-            'price_8_seater'   => 'required|numeric|min:0',
-            'is_active'        => 'required|boolean',
+            'pickup_location'          => 'required|string',
+            'dropoff_location'         => 'required|string',
+            'is_active'                => 'required|boolean',
+            'prices'                   => 'required|array',
+            'prices.*.vehicle_type_id' => 'required|integer',
+            'prices.*.price'           => 'required|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -211,16 +235,20 @@ class AdminController extends Controller
         $route->update([
             'pickup_location'  => $request->pickup_location,
             'dropoff_location' => $request->dropoff_location,
-            'price_4_seater'   => $request->price_4_seater,
-            'price_7_seater'   => $request->price_7_seater,
-            'price_8_seater'   => $request->price_8_seater,
             'is_active'        => $request->is_active,
         ]);
 
-        return response()->json([
-            'message' => 'Route updated',
-            'route'   => $route
-        ], 200);
+        foreach ($request->prices as $price) {
+            RoutePrice::updateOrCreate(
+                [
+                    'route_id'        => $route->id,
+                    'vehicle_type_id' => $price['vehicle_type_id'],
+                ],
+                ['price' => $price['price']]
+            );
+        }
+
+        return response()->json(['message' => 'Route updated', 'route' => $route], 200);
     }
 
     public function deleteRoute(Request $request, $id)
@@ -251,7 +279,6 @@ class AdminController extends Controller
                     'email'          => $user->email,
                     'phone'          => $user->phone,
                     'created_at'     => $user->created_at,
-                    // ✅ Fixed: handle Cloudinary URL
                     'profile_photo'  => $this->getPhotoUrl($user->profile_photo),
                     'vehicle_type'   => $user->driver?->vehicle_type,
                     'vehicle_number' => $user->driver?->vehicle_number,
@@ -274,7 +301,7 @@ class AdminController extends Controller
             'email'          => 'required|email|unique:users,email',
             'password'       => 'required|min:6',
             'phone'          => 'required|string',
-            'vehicle_type'   => 'required|in:4-seater,7-seater,8-seater',
+            'vehicle_type'   => 'required|string',
             'vehicle_number' => 'required|string',
             'license_number' => 'required|string',
         ]);
@@ -314,7 +341,6 @@ class AdminController extends Controller
         $user = User::where('id', $id)->where('user_type', 'driver')->first();
         if (!$user) return response()->json(['message' => 'Driver not found'], 404);
 
-        // ✅ Get driver id before deleting
         $driver   = Driver::where('user_id', $id)->first();
         $driverId = $driver?->id;
 
@@ -322,7 +348,6 @@ class AdminController extends Controller
         Driver::where('user_id', $id)->delete();
         $user->delete();
 
-        // ✅ Delete from Firebase Realtime Database
         if ($driverId) {
             try {
                 $firebaseUrl = env('FIREBASE_DATABASE_URL', 'https://taxiapp-e5f40-default-rtdb.asia-southeast1.firebasedatabase.app');
@@ -393,7 +418,6 @@ class AdminController extends Controller
                     'email'         => $user->email,
                     'phone'         => $user->phone,
                     'created_at'    => $user->created_at,
-                    // ✅ Fixed: handle Cloudinary URL
                     'profile_photo' => $this->getPhotoUrl($user->profile_photo),
                     'total_rides'   => Booking::where('passenger_id', $user->id)
                         ->where('status', 'completed')
@@ -485,68 +509,67 @@ class AdminController extends Controller
 
     // ==================== VEHICLE TYPE MANAGEMENT ====================
 
-public function getVehicleTypes(Request $request)
-{
-    if ($error = $this->checkAdmin($request)) return $error;
-    $types = VehicleType::orderBy('name')->get();
-    return response()->json(['vehicle_types' => $types], 200);
-}
-
-public function createVehicleType(Request $request)
-{
-    if ($error = $this->checkAdmin($request)) return $error;
-
-    $validator = Validator::make($request->all(), [
-        'name'         => 'required|string|unique:vehicle_types,name',
-        'display_name' => 'required|string',
-    ]);
-
-    if ($validator->fails()) {
-        return response()->json(['errors' => $validator->errors()], 422);
+    public function getVehicleTypes(Request $request)
+    {
+        if ($error = $this->checkAdmin($request)) return $error;
+        $types = VehicleType::orderBy('name')->get();
+        return response()->json(['vehicle_types' => $types], 200);
     }
 
-    $type = VehicleType::create([
-        'name'         => strtolower(str_replace(' ', '-', $request->name)),
-        'display_name' => $request->display_name,
-        'is_active'    => true,
-    ]);
+    public function createVehicleType(Request $request)
+    {
+        if ($error = $this->checkAdmin($request)) return $error;
 
-    return response()->json(['message' => 'Vehicle type created', 'vehicle_type' => $type], 201);
-}
+        $validator = Validator::make($request->all(), [
+            'name'         => 'required|string|unique:vehicle_types,name',
+            'display_name' => 'required|string',
+        ]);
 
-public function updateVehicleType(Request $request, $id)
-{
-    if ($error = $this->checkAdmin($request)) return $error;
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
 
-    $validator = Validator::make($request->all(), [
-        'display_name' => 'required|string',
-        'is_active'    => 'required|boolean',
-    ]);
+        $type = VehicleType::create([
+            'name'         => strtolower(str_replace(' ', '-', $request->name)),
+            'display_name' => $request->display_name,
+            'is_active'    => true,
+        ]);
 
-    if ($validator->fails()) {
-        return response()->json(['errors' => $validator->errors()], 422);
+        return response()->json(['message' => 'Vehicle type created', 'vehicle_type' => $type], 201);
     }
 
-    $type = VehicleType::find($id);
-    if (!$type) return response()->json(['message' => 'Vehicle type not found'], 404);
+    public function updateVehicleType(Request $request, $id)
+    {
+        if ($error = $this->checkAdmin($request)) return $error;
 
-    $type->update([
-        'display_name' => $request->display_name,
-        'is_active'    => $request->is_active,
-    ]);
+        $validator = Validator::make($request->all(), [
+            'display_name' => 'required|string',
+            'is_active'    => 'required|boolean',
+        ]);
 
-    return response()->json(['message' => 'Vehicle type updated', 'vehicle_type' => $type], 200);
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $type = VehicleType::find($id);
+        if (!$type) return response()->json(['message' => 'Vehicle type not found'], 404);
+
+        $type->update([
+            'display_name' => $request->display_name,
+            'is_active'    => $request->is_active,
+        ]);
+
+        return response()->json(['message' => 'Vehicle type updated', 'vehicle_type' => $type], 200);
+    }
+
+    public function deleteVehicleType(Request $request, $id)
+    {
+        if ($error = $this->checkAdmin($request)) return $error;
+
+        $type = VehicleType::find($id);
+        if (!$type) return response()->json(['message' => 'Vehicle type not found'], 404);
+
+        $type->delete();
+        return response()->json(['message' => 'Vehicle type deleted'], 200);
+    }
 }
-
-public function deleteVehicleType(Request $request, $id)
-{
-    if ($error = $this->checkAdmin($request)) return $error;
-
-    $type = VehicleType::find($id);
-    if (!$type) return response()->json(['message' => 'Vehicle type not found'], 404);
-
-    $type->delete();
-    return response()->json(['message' => 'Vehicle type deleted'], 200);
-}
-}
-
