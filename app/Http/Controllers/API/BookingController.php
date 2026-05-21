@@ -475,9 +475,14 @@ class BookingController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        // Only completed bookings can be rated
-        if ($booking->status !== 'completed') {
-            return response()->json(['message' => 'Can only rate completed rides'], 400);
+        // Allow rating for completed rides AND cancelled scheduled rides
+        if (!in_array($booking->status, ['completed', 'cancelled'])) {
+            return response()->json(['message' => 'Can only rate completed or cancelled rides'], 400);
+        }
+
+        // For cancelled bookings, only allow if it was a scheduled booking (driver cancelled)
+        if ($booking->status === 'cancelled' && $booking->booking_type !== 'scheduled') {
+            return response()->json(['message' => 'Can only rate cancelled scheduled rides'], 400);
         }
 
         // Cannot rate twice
