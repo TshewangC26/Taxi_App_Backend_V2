@@ -27,7 +27,7 @@ class AuthController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'name'           => 'required|string|max:255',
-            'email'          => 'required|string|email|max:255|unique:users',
+            'email'          => 'required|string|email|max:255|unique:users,email,NULL,id,user_type,' . $request->user_type,
             'password'       => 'required|string|min:12',
             'user_type'      => 'required|in:passenger,driver',
             'phone'          => 'required|string',
@@ -90,6 +90,7 @@ class AuthController extends Controller
         $validator = Validator::make($request->all(), [
             'name'      => 'required|string',
             'password'  => 'required',
+            'user_type' => 'required|in:passenger,driver',
             'fcm_token' => 'nullable|string',
         ]);
 
@@ -97,7 +98,9 @@ class AuthController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $user = User::where('name', $request->name)->first();
+        $user = User::where('name', $request->name)
+                     ->where('user_type', $request->user_type)
+                     ->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
             return response()->json(['message' => 'Invalid credentials'], 401);
@@ -318,7 +321,7 @@ class AuthController extends Controller
             return response()->json(['message' => 'Invalid or expired code!'], 400);
         }
 
-        if (now()->diffInMinutes($reset->created_at) > 15) {
+        if (now()->diffInMinutes($reset->created_at) > 5) {
             return response()->json(['message' => 'Code has expired! Please request a new one.'], 400);
         }
 
