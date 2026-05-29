@@ -277,6 +277,7 @@ class AuthController extends Controller
             $emailContent = view('emails.reset_password', [
                 'token' => $token,
                 'name'  => $user->name,
+                'userType' => $request->user_type,
             ])->render();
 
             $brevo = new \Brevo\Brevo(env('BREVO_API_KEY'));
