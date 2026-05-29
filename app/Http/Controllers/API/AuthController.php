@@ -251,14 +251,13 @@ class AuthController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'email'     => 'required|email',
-            'user_type' => 'required|in:passenger,driver', // ✅ added
+            'user_type' => 'required|in:passenger,driver',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // ✅ Find user by email + user_type
         $user = User::where('email', $request->email)
                      ->where('user_type', $request->user_type)
                      ->first();
@@ -318,6 +317,7 @@ class AuthController extends Controller
         $validator = Validator::make($request->all(), [
             'email'            => 'required|email',
             'token'            => 'required|string',
+            'user_type'        => 'required|in:passenger,driver', // ✅ added
             'new_password'     => 'required|string|min:6',
             'confirm_password' => 'required|same:new_password',
         ]);
@@ -339,7 +339,15 @@ class AuthController extends Controller
             return response()->json(['message' => 'Code has expired! Please request a new one.'], 400);
         }
 
-        $user           = User::where('email', $request->email)->first();
+        // ✅ Find user by email + user_type
+        $user = User::where('email', $request->email)
+                     ->where('user_type', $request->user_type)
+                     ->first();
+
+        if (!$user) {
+            return response()->json(['message' => 'User not found!'], 404);
+        }
+
         $user->password = Hash::make($request->new_password);
         $user->save();
 
