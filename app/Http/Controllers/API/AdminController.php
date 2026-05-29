@@ -283,6 +283,7 @@ class AdminController extends Controller
                     'vehicle_type'   => $user->driver?->vehicle_type,
                     'vehicle_number' => $user->driver?->vehicle_number,
                     'license_number' => $user->driver?->license_number,
+                    'license_image'  => $user->driver?->license_image,
                     'status'         => $user->driver?->status ?? 'offline',
                     'is_available'   => $user->driver?->is_available ?? false,
                     'driver_id'      => $user->driver?->id,
