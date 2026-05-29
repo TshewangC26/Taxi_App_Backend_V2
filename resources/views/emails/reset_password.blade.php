@@ -71,7 +71,6 @@
         <p style="text-align: center; color: #666;">
             This code will expire in <strong>5 minutes</strong>
         </p>
-        <p>If you did not request a password reset, please ignore this email.</p>
         <div class="footer">
             <p>Easy Ride App &copy; 2026</p>
         </div>
