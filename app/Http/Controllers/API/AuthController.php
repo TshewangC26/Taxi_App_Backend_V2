@@ -13,7 +13,6 @@ use Illuminate\Support\Facades\Storage;
 
 class AuthController extends Controller
 {
-    // ✅ Helper to get correct profile photo URL (Firebase or local)
     private function getPhotoUrl($profilePhoto): ?string
     {
         if (!$profilePhoto) return null;
@@ -27,7 +26,7 @@ class AuthController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'name'           => 'required|string|max:255',
-            'email'          => 'required|string|email|max:255|unique:users,email,NULL,id,user_type,' . $request->user_type,
+            'email'          => 'required|string|email|max:255',
             'password'       => 'required|string|min:12',
             'user_type'      => 'required|in:passenger,driver',
             'phone'          => 'required|string',
@@ -38,6 +37,17 @@ class AuthController extends Controller
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        // ✅ Manual check: same email + same user_type = not allowed
+        $exists = User::where('email', $request->email)
+                       ->where('user_type', $request->user_type)
+                       ->exists();
+
+        if ($exists) {
+            return response()->json([
+                'errors' => ['email' => ['This email is already registered as ' . $request->user_type . '.']]
+            ], 422);
         }
 
         try {
@@ -240,14 +250,18 @@ class AuthController extends Controller
     public function forgotPassword(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
+            'email'     => 'required|email',
+            'user_type' => 'required|in:passenger,driver', // ✅ added
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $user = User::where('email', $request->email)->first();
+        // ✅ Find user by email + user_type
+        $user = User::where('email', $request->email)
+                     ->where('user_type', $request->user_type)
+                     ->first();
 
         if (!$user) {
             return response()->json(['message' => 'Email not found!'], 404);
