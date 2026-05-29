@@ -33,14 +33,13 @@ class AuthController extends Controller
             'vehicle_type'   => 'required_if:user_type,driver|nullable|string',
             'vehicle_number' => 'required_if:user_type,driver|string',
             'license_number' => 'required_if:user_type,driver|string',
-            'license_image'   => 'required_if:user_type,driver|string|nullable',
+            'license_image'  => 'required_if:user_type,driver|string|nullable',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // ✅ Manual check: same email + same user_type = not allowed
         $exists = User::where('email', $request->email)
                        ->where('user_type', $request->user_type)
                        ->exists();
@@ -110,9 +109,17 @@ class AuthController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        // ✅ Try finding by name + user_type first
         $user = User::where('name', $request->name)
                      ->where('user_type', $request->user_type)
                      ->first();
+
+        // ✅ If not found, check if they're admin
+        if (!$user) {
+            $user = User::where('name', $request->name)
+                         ->where('user_type', 'admin')
+                         ->first();
+        }
 
         if (!$user || !Hash::check($request->password, $user->password)) {
             return response()->json(['message' => 'Invalid credentials'], 401);
@@ -277,8 +284,8 @@ class AuthController extends Controller
 
         try {
             $emailContent = view('emails.reset_password', [
-                'token' => $token,
-                'name'  => $user->name,
+                'token'    => $token,
+                'name'     => $user->name,
                 'userType' => $request->user_type,
             ])->render();
 
@@ -320,7 +327,7 @@ class AuthController extends Controller
         $validator = Validator::make($request->all(), [
             'email'            => 'required|email',
             'token'            => 'required|string',
-            'user_type'        => 'required|in:passenger,driver', // ✅ added
+            'user_type'        => 'required|in:passenger,driver',
             'new_password'     => 'required|string|min:6',
             'confirm_password' => 'required|same:new_password',
         ]);
@@ -342,7 +349,6 @@ class AuthController extends Controller
             return response()->json(['message' => 'Code has expired! Please request a new one.'], 400);
         }
 
-        // ✅ Find user by email + user_type
         $user = User::where('email', $request->email)
                      ->where('user_type', $request->user_type)
                      ->first();
