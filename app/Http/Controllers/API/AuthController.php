@@ -33,6 +33,7 @@ class AuthController extends Controller
             'vehicle_type'   => 'required_if:user_type,driver|nullable|string',
             'vehicle_number' => 'required_if:user_type,driver|string',
             'license_number' => 'required_if:user_type,driver|string',
+            'license_image'   => 'required_if:user_type,driver|string|nullable',
         ]);
 
         if ($validator->fails()) {
@@ -67,6 +68,7 @@ class AuthController extends Controller
                     'vehicle_type'   => $request->vehicle_type,
                     'vehicle_number' => $request->vehicle_number,
                     'license_number' => $request->license_number,
+                    'license_image'  => $request->license_image,
                     'is_available'   => false,
                     'status'         => 'offline',
                 ]);

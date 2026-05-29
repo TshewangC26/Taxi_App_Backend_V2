@@ -11,6 +11,7 @@ class Driver extends Model
         'vehicle_type',
         'vehicle_number',
         'license_number',
+        'license_image',
         'is_available',
         'status',
         'bank_name',
