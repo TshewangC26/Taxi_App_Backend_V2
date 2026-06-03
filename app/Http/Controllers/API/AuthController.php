@@ -171,10 +171,11 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
+        // ✅ Allow same email for different user types (passenger/driver)
         $validator = Validator::make($request->all(), [
             'name'              => 'required|string|max:255',
             'phone'             => 'required|string',
-            'email'             => 'nullable|email|unique:users,email,' . $user->id,
+            'email'             => 'nullable|email|unique:users,email,' . $user->id . ',id,user_type,' . $user->user_type,
             'profile_photo'     => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
             'profile_photo_url' => 'nullable|string',
         ]);
