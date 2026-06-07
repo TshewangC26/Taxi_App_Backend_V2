@@ -143,7 +143,7 @@ class BookingController extends Controller
         $routePrice     = RoutePrice::where('route_id', $route->id)
                             ->where('vehicle_type_id', $vehicleType?->id)
                             ->first();
-        $estimatedPrice = $routePrice?->price ?? 0;                   
+        $estimatedPrice = $routePrice?->price ?? 0;
         $status         = 'pending';
         $driverId       = null;
 
@@ -225,8 +225,12 @@ class BookingController extends Controller
                 if ($booking->driver_id) {
                     $driver = Driver::where('user_id', $booking->driver_id)->first();
                     $data['driver_firebase_id'] = $driver?->id;
+                    // ✅ Include driver phone for passenger to contact
+                    $driverUser = User::find($booking->driver_id);
+                    $data['driver_phone'] = $driverUser?->phone;
                 } else {
                     $data['driver_firebase_id'] = null;
+                    $data['driver_phone'] = null;
                 }
                 return $data;
             });
@@ -475,22 +479,18 @@ class BookingController extends Controller
             return response()->json(['message' => 'Booking not found'], 404);
         }
 
-        // Only the passenger of this booking can rate
         if ($booking->passenger_id !== $request->user()->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        // Allow rating for completed rides AND cancelled scheduled rides
         if (!in_array($booking->status, ['completed', 'cancelled'])) {
             return response()->json(['message' => 'Can only rate completed or cancelled rides'], 400);
         }
 
-        // For cancelled bookings, only allow if it was a scheduled booking (driver cancelled)
         if ($booking->status === 'cancelled' && $booking->booking_type !== 'scheduled') {
             return response()->json(['message' => 'Can only rate cancelled scheduled rides'], 400);
         }
 
-        // Cannot rate twice
         if ($booking->rating !== null) {
             return response()->json(['message' => 'You have already rated this ride'], 400);
         }
@@ -504,13 +504,11 @@ class BookingController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // Save rating to booking
         $booking->update([
             'rating'         => $request->rating,
             'rating_comment' => $request->rating_comment,
         ]);
 
-        // Recalculate driver's average rating
         $driver = Driver::where('user_id', $booking->driver_id)->first();
         if ($driver) {
             $avg   = Booking::where('driver_id', $booking->driver_id)
@@ -532,19 +530,19 @@ class BookingController extends Controller
     }
 
     // Get single booking
-public function getBooking(Request $request, $id)
-{
-    $booking = Booking::find($id);
+    public function getBooking(Request $request, $id)
+    {
+        $booking = Booking::find($id);
 
-    if (!$booking) {
-        return response()->json(['message' => 'Booking not found'], 404);
+        if (!$booking) {
+            return response()->json(['message' => 'Booking not found'], 404);
+        }
+
+        if ($booking->passenger_id !== $request->user()->id &&
+            $booking->driver_id !== $request->user()->id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        return response()->json(['booking' => $booking], 200);
     }
-
-    if ($booking->passenger_id !== $request->user()->id &&
-        $booking->driver_id !== $request->user()->id) {
-        return response()->json(['message' => 'Unauthorized'], 403);
-    }
-
-    return response()->json(['booking' => $booking], 200);
-}
 }
