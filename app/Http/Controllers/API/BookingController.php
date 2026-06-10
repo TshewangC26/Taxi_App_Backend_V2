@@ -228,9 +228,11 @@ class BookingController extends Controller
                     // ✅ Include driver phone for passenger to contact
                     $driverUser = User::find($booking->driver_id);
                     $data['driver_phone'] = $driverUser?->phone;
+                    $data['driver_vehicle_number'] = $driver?->vehicle_number;
                 } else {
                     $data['driver_firebase_id'] = null;
                     $data['driver_phone'] = null;
+                    $data['driver_vehicle_number'] = null;
                 }
                 return $data;
             });
